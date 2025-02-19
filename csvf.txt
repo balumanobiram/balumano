@@ -1,0 +1,163 @@
+To convert the uploaded CSV file to Excel (XLSX) in your Spring Boot backend, follow these steps:
+
+1️⃣ Accept the CSV file from React
+2️⃣ Parse and convert it to Excel using Apache POI
+3️⃣ Save or return the Excel file
+
+1️⃣ Frontend (React)
+
+The frontend remains the same—it uploads the CSV file via FormData.
+
+📌 FileUpload.js (React)
+
+import { useState } from "react";
+import axios from "axios";
+import FileSaver from "file-saver"; // To download Excel file
+
+const FileUpload = () => {
+  const [file, setFile] = useState(null);
+
+  const handleFileChange = (event) => {
+    setFile(event.target.files[0]);
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      alert("Please select a file first!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await axios.post("http://localhost:8080/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        responseType: "blob", // Important for file download
+      });
+
+      // Create a downloadable link
+      const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      FileSaver.saveAs(blob, "converted.xlsx");
+
+      alert("File converted and downloaded successfully!");
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("Failed to process file!");
+    }
+  };
+
+  return (
+    <div>
+      <input type="file" accept=".csv" onChange={handleFileChange} />
+      <button onClick={handleUpload}>Upload & Convert</button>
+    </div>
+  );
+};
+
+export default FileUpload;
+
+2️⃣ Backend (Spring Boot)
+	1.	Read the CSV file
+	2.	Convert it to Excel (XLSX) using Apache POI
+	3.	Return the Excel file for download
+
+📌 Add Apache POI Dependency (pom.xml)
+
+<dependencies>
+    <dependency>
+        <groupId>org.apache.poi</groupId>
+        <artifactId>poi-ooxml</artifactId>
+        <version>5.2.3</version>
+    </dependency>
+</dependencies>
+
+📌 FileUploadController.java
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.http.*;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.*;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@CrossOrigin(origins = "http://localhost:3000")
+public class FileUploadController {
+
+    @PostMapping("/upload")
+    public ResponseEntity<byte[]> uploadFile(@RequestParam("file") MultipartFile file) {
+        if (file.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        }
+
+        try {
+            // Read CSV content
+            List<String> lines = new BufferedReader(new InputStreamReader(file.getInputStream()))
+                    .lines()
+                    .collect(Collectors.toList());
+
+            // Create an Excel Workbook
+            Workbook workbook = new XSSFWorkbook();
+            Sheet sheet = workbook.createSheet("Sheet1");
+
+            // Convert CSV to Excel rows
+            for (int i = 0; i < lines.size(); i++) {
+                Row row = sheet.createRow(i);
+                String[] cells = lines.get(i).split(",");
+                
+                for (int j = 0; j < cells.length; j++) {
+                    row.createCell(j).setCellValue(cells[j]);
+                }
+            }
+
+            // Save the Excel file to a byte array
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            workbook.write(outputStream);
+            workbook.close();
+
+            byte[] excelBytes = outputStream.toByteArray();
+
+            // Return the Excel file for download
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDisposition(ContentDisposition.attachment().filename("converted.xlsx").build());
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(excelBytes);
+
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+}
+
+3️⃣ How It Works
+	1.	React uploads the CSV file to http://localhost:8080/upload.
+	2.	Spring Boot backend:
+	•	Reads the CSV file.
+	•	Converts it into an Excel file (.xlsx) using Apache POI.
+	•	Returns the file to the frontend.
+	3.	React frontend downloads the Excel file automatically.
+
+✅ Next Steps
+	•	If you want to save the Excel file on the backend, modify this:
+
+FileOutputStream fileOut = new FileOutputStream("uploads/converted.xlsx");
+workbook.write(fileOut);
+fileOut.close();
+
+
+	•	To add styling to the Excel sheet, use CellStyle:
+
+CellStyle headerStyle = workbook.createCellStyle();
+Font font = workbook.createFont();
+font.setBold(true);
+headerStyle.setFont(font);
+row.getCell(j).setCellStyle(headerStyle);
+
+Now your CSV file gets converted into Excel and downloads automatically! 🚀 Let me know if you need any changes.
